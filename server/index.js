@@ -22,6 +22,8 @@ app.use(async (req, res, next) => {
   }
 });
 
+app.get('/favicon.ico', (req, res) => res.redirect('/favicon.svg'));
+
 app.use('/api/auth', authRoutes);
 app.use('/api', recordRoutes);
 app.use('/api', substanceRoutes);
