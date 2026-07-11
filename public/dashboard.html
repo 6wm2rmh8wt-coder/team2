@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>대시보드 - 메디커넥트</title>
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="topnav">
+    <a href="/dashboard.html" class="logo"><span>메디</span>커넥트</a>
+    <nav>
+      <a href="/search-engine.html">상호작용 검색엔진</a>
+      <a href="/mypage.html">마이페이지</a>
+    </nav>
+  </header>
+
+  <main class="container" style="padding-top:32px;">
+    <div class="row" style="justify-content:space-between;">
+      <h2>내 복약 대시보드</h2>
+      <div class="row">
+        <a href="/substance-new.html" class="btn btn-secondary">영양제/음식 추가</a>
+        <a href="/record-new.html" class="btn btn-primary">진료 기록 추가</a>
+      </div>
+    </div>
+
+    <div id="risk-badge-row" class="hidden" style="margin-bottom:16px;">
+      <span id="risk-badge" class="badge badge-coral" style="cursor:pointer;">상호작용 위험 발견됨 · 자세히 보기</span>
+    </div>
+
+    <section class="row" style="align-items:flex-start;gap:32px;">
+      <div class="card" style="flex:2;">
+        <h3>진료·복약 타임라인</h3>
+        <div id="timeline" class="stack"><p class="muted">불러오는 중...</p></div>
+      </div>
+      <div class="card" style="flex:1;">
+        <h3>현재 복용 중</h3>
+        <div id="current-list" class="stack"><p class="muted">불러오는 중...</p></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/interactionModal.js"></script>
+  <script>
+    (async () => {
+      const user = await requireLogin();
+      if (!user) return;
+
+      const [visits, substances] = await Promise.all([
+        apiFetch('/api/visits'),
+        apiFetch('/api/substances'),
+      ]);
+
+      const timelineEl = document.getElementById('timeline');
+      if (visits.length === 0) {
+        timelineEl.innerHTML = '<p class="muted">등록된 진료 기록이 없습니다.</p>';
+      } else {
+        timelineEl.innerHTML = visits.map((v) => `
+          <div class="timeline-item">
+            <div class="timeline-date">${v.visit_date}</div>
+            <div class="timeline-body">
+              <h4>${v.hospital_name}</h4>
+              <div class="meta">처방: ${v.medications.join(', ') || '-'}</div>
+              ${v.diagnosis ? `<div class="meta">진단: ${v.diagnosis}</div>` : ''}
+              ${v.medical_history ? `<div class="meta">병력: ${v.medical_history}</div>` : ''}
+              ${v.test_result ? `<div class="meta">검사 결과: ${v.test_result}</div>` : ''}
+              ${v.files.length ? `<div class="meta">첨부: ${v.files.map((f) => `<a href="/api/files/${f.id}" target="_blank">${f.originalName}</a>`).join(', ')}</div>` : ''}
+            </div>
+          </div>`).join('');
+      }
+
+      const currentListEl = document.getElementById('current-list');
+      const allMeds = visits.flatMap((v) => v.medications);
+      const allSubstances = substances.map((s) => s.name);
+      const all = [...allMeds, ...allSubstances];
+      if (all.length === 0) {
+        currentListEl.innerHTML = '<p class="muted">등록된 약물/영양제가 없습니다.</p>';
+      } else {
+        currentListEl.innerHTML =
+          allMeds.map((m) => `<div>${m} <span class="badge badge-success">처방약</span></div>`).join('') +
+          substances.map((s) => `<div>${s.name} <span class="badge badge-yellow">${s.category === 'supplement' ? '영양제' : '음식'}</span></div>`).join('');
+      }
+
+      if (all.length >= 2) {
+        const result = await apiFetch('/api/interactions/search', {
+          method: 'POST',
+          body: JSON.stringify({ items: all }),
+        });
+        if (result.overallRisk !== 'safe') {
+          const badgeRow = document.getElementById('risk-badge-row');
+          const badge = document.getElementById('risk-badge');
+          badgeRow.classList.remove('hidden');
+          badge.className = 'badge ' + (result.overallRisk === 'danger' ? 'badge-coral' : 'badge-yellow');
+          badge.addEventListener('click', () => {
+            const items = [...new Set(result.matches.flatMap((m) => m.items))];
+            location.href = '/guide.html?items=' + encodeURIComponent(items.join(','));
+          });
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

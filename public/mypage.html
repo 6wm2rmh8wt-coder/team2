@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>마이페이지 - 메디커넥트</title>
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="topnav">
+    <a href="/dashboard.html" class="logo"><span>메디</span>커넥트</a>
+    <nav>
+      <a href="/dashboard.html">대시보드</a>
+      <a href="/search-engine.html">상호작용 검색엔진</a>
+    </nav>
+  </header>
+
+  <main class="container" style="max-width:640px;padding-top:32px;">
+    <h2>마이페이지</h2>
+
+    <div class="card" id="profile-card">
+      <p class="muted">불러오는 중...</p>
+    </div>
+
+    <h4 style="margin-top:32px;">등록 이력</h4>
+    <div id="history" class="stack"><p class="muted">불러오는 중...</p></div>
+
+    <button class="btn btn-secondary" id="logout-btn" style="margin-top:24px;">로그아웃</button>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script>
+    (async () => {
+      const user = await requireLogin();
+      if (!user) return;
+
+      document.getElementById('profile-card').innerHTML = `
+        <h4 style="margin:0;">${user.name}</h4>
+        <p class="muted" style="margin:4px 0 0;">${user.email}</p>
+      `;
+
+      const [visits, substances] = await Promise.all([
+        apiFetch('/api/visits'),
+        apiFetch('/api/substances'),
+      ]);
+
+      const historyEl = document.getElementById('history');
+      const visitRows = visits.map((v) => `
+        <div class="timeline-item">
+          <div class="timeline-date">${v.visit_date}</div>
+          <div class="timeline-body">
+            <h4>${v.hospital_name} <span class="badge badge-yellow">${v.source === 'ocr' ? 'OCR 등록' : '직접 입력'}</span></h4>
+            <div class="meta">처방: ${v.medications.join(', ') || '-'}</div>
+            ${v.diagnosis ? `<div class="meta">진단: ${v.diagnosis}</div>` : ''}
+            ${v.medical_history ? `<div class="meta">병력: ${v.medical_history}</div>` : ''}
+            ${v.test_result ? `<div class="meta">검사 결과: ${v.test_result}</div>` : ''}
+            ${v.files.length ? `<div class="meta">첨부: ${v.files.map((f) => `<a href="/api/files/${f.id}" target="_blank">${f.originalName}</a>`).join(', ')}</div>` : ''}
+          </div>
+        </div>`).join('');
+      const substanceRows = substances.map((s) => `
+        <div class="timeline-item">
+          <div class="timeline-date">${s.created_at.slice(0, 10)}</div>
+          <div class="timeline-body">
+            <h4>${s.name} <span class="badge badge-yellow">${s.category === 'supplement' ? '영양제' : '음식'}</span></h4>
+          </div>
+        </div>`).join('');
+
+      historyEl.innerHTML = (visitRows + substanceRows) || '<p class="muted">등록된 이력이 없습니다.</p>';
+
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        await apiFetch('/api/auth/logout', { method: 'POST' });
+        location.href = '/';
+      });
+    })();
+  </script>
+</body>
+</html>

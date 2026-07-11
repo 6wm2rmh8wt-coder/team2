@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>로그인 - 메디커넥트</title>
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="topnav">
+    <a href="/" class="logo"><span>메디</span>커넥트</a>
+  </header>
+
+  <main class="container" style="max-width:400px;padding-top:64px;">
+    <h2 class="center">로그인</h2>
+    <form id="login-form" class="stack">
+      <div class="field">
+        <label for="email">이메일</label>
+        <input class="text-input" type="email" id="email" required>
+      </div>
+      <div class="field">
+        <label for="password">비밀번호</label>
+        <input class="text-input" type="password" id="password" required>
+      </div>
+      <p id="error" class="error-text hidden"></p>
+      <button type="submit" class="btn btn-primary btn-block">로그인</button>
+    </form>
+    <p class="center muted" style="margin-top:16px;">
+      계정이 없으신가요? <a href="/signup.html">회원가입</a>
+    </p>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('error');
+      errorEl.classList.add('hidden');
+      try {
+        await apiFetch('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+        location.href = '/dashboard.html';
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

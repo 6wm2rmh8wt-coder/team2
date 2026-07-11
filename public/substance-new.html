@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>영양제/음식 등록 - 메디커넥트</title>
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="topnav">
+    <a href="/dashboard.html" class="logo"><span>메디</span>커넥트</a>
+  </header>
+
+  <main class="container" style="max-width:480px;padding-top:32px;">
+    <a href="/dashboard.html" class="muted">&larr; 대시보드로</a>
+    <h2>영양제/음식 등록</h2>
+
+    <form id="add-form" class="row">
+      <select class="text-input" id="category" style="max-width:140px;">
+        <option value="supplement">영양제</option>
+        <option value="food">음식</option>
+      </select>
+      <input class="text-input" type="text" id="name" placeholder="예: 자몽, 오메가3" required>
+      <button class="btn btn-primary" type="submit">추가</button>
+    </form>
+
+    <p id="error" class="error-text hidden"></p>
+
+    <h4 style="margin-top:24px;">등록된 항목</h4>
+    <div id="list" class="stack"><p class="muted">등록된 항목이 없습니다.</p></div>
+
+    <div class="row" style="margin-top:24px;">
+      <a href="/dashboard.html" class="btn btn-primary">완료 (대시보드로)</a>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/interactionModal.js"></script>
+  <script>
+    (async () => {
+      const user = await requireLogin();
+      if (!user) return;
+
+      const prefillName = new URLSearchParams(location.search).get('name');
+      if (prefillName) document.getElementById('name').value = prefillName;
+
+      async function renderList() {
+        const substances = await apiFetch('/api/substances');
+        const listEl = document.getElementById('list');
+        listEl.innerHTML = substances.length === 0
+          ? '<p class="muted">등록된 항목이 없습니다.</p>'
+          : substances.map((s) => `<div>${s.name} <span class="badge badge-yellow">${s.category === 'supplement' ? '영양제' : '음식'}</span></div>`).join('');
+      }
+      await renderList();
+
+      document.getElementById('add-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('error');
+        errorEl.classList.add('hidden');
+        try {
+          const { interactionResult } = await apiFetch('/api/substances', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: document.getElementById('name').value,
+              category: document.getElementById('category').value,
+            }),
+          });
+          document.getElementById('name').value = '';
+          await renderList();
+          showInteractionModalIfNeeded(interactionResult);
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

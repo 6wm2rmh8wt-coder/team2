@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>약물 상호작용 검색엔진 - 메디커넥트</title>
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="topnav">
+    <a href="/dashboard.html" class="logo"><span>메디</span>커넥트</a>
+    <nav>
+      <a href="/dashboard.html">대시보드</a>
+      <a href="/mypage.html">마이페이지</a>
+    </nav>
+  </header>
+
+  <main class="container" style="max-width:640px;padding-top:32px;">
+    <h2>약물 상호작용 검색엔진</h2>
+    <p class="muted">등록된 복약 이력과 무관하게, 궁금한 약물·영양제·음식을 여러 개 함께 입력해 상호작용을 조회하세요.</p>
+
+    <div class="tag-input-box" id="tag-box">
+      <input type="text" id="item-input" placeholder="물질명 입력 후 Enter (2개 이상)">
+    </div>
+    <p id="error" class="error-text hidden"></p>
+    <button class="btn btn-primary" id="search-btn" style="margin-top:12px;">조회하기</button>
+
+    <div id="result" class="stack" style="margin-top:32px;"></div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script>
+    (async () => {
+      const user = await requireLogin();
+      if (!user) return;
+
+      const items = [];
+      const tagBox = document.getElementById('tag-box');
+      const itemInput = document.getElementById('item-input');
+
+      function renderTags() {
+        tagBox.querySelectorAll('.tag-chip').forEach((el) => el.remove());
+        items.forEach((name, idx) => {
+          const chip = document.createElement('span');
+          chip.className = 'tag-chip';
+          chip.innerHTML = `${name} <button type="button" data-idx="${idx}">×</button>`;
+          chip.querySelector('button').addEventListener('click', () => {
+            items.splice(idx, 1);
+            renderTags();
+          });
+          tagBox.insertBefore(chip, itemInput);
+        });
+      }
+      itemInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const trimmed = itemInput.value.trim();
+          if (trimmed) { items.push(trimmed); renderTags(); }
+          itemInput.value = '';
+        }
+      });
+
+      document.getElementById('search-btn').addEventListener('click', async () => {
+        const errorEl = document.getElementById('error');
+        errorEl.classList.add('hidden');
+        const resultEl = document.getElementById('result');
+        try {
+          const result = await apiFetch('/api/interactions/search', {
+            method: 'POST',
+            body: JSON.stringify({ items }),
+          });
+          const riskLabel = { danger: '위험', caution: '주의', safe: '안전' }[result.overallRisk];
+          const riskBadgeClass = { danger: 'badge-coral', caution: 'badge-yellow', safe: 'badge-success' }[result.overallRisk];
+          resultEl.innerHTML = `
+            <div class="card">
+              <span class="badge ${riskBadgeClass}">${riskLabel}</span>
+              <p class="muted" style="margin-top:8px;">입력한 조합: ${items.join(' + ')}</p>
+            </div>
+            ${result.matches.map((m) => `
+              <div class="card">
+                <div class="row" style="justify-content:space-between;">
+                  <strong>${m.items.join(' + ')}</strong>
+                  <span class="badge ${m.severity === 'danger' ? 'badge-coral' : 'badge-yellow'}">${m.severity === 'danger' ? '위험' : '주의'}</span>
+                </div>
+                <p>${m.description}</p>
+                <a class="btn btn-secondary" href="/guide.html?items=${encodeURIComponent(m.items.join(','))}">자세히 보기</a>
+              </div>
+            `).join('') || '<p class="muted">발견된 상호작용 위험이 없습니다.</p>'}
+          `;
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

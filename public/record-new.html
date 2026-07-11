@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>진료·처방 기록 등록 - 메디커넥트</title>
+<link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="topnav">
+    <a href="/dashboard.html" class="logo"><span>메디</span>커넥트</a>
+  </header>
+
+  <main class="container" style="max-width:560px;padding-top:32px;">
+    <a href="/dashboard.html" class="muted">&larr; 대시보드로</a>
+    <h2>진료·처방 기록 등록</h2>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="manual">직접 입력</button>
+      <button class="tab" data-tab="ocr">처방전 사진 업로드(OCR)</button>
+    </div>
+
+    <div id="ocr-panel" class="hidden card" style="margin-bottom:16px;">
+      <div class="field">
+        <label>처방전 사진</label>
+        <input class="text-input" type="file" id="ocr-file" accept="image/*">
+      </div>
+      <button class="btn btn-secondary" id="ocr-run" type="button">인식하기</button>
+      <p class="muted" style="margin-top:8px;font-size:13px;">
+        ※ 현재는 실제 OCR 엔진 대신 인식 결과를 모의로 채워 넣는 프로토타입입니다. 아래에서 내용을 확인·수정한 뒤 저장하세요.
+      </p>
+    </div>
+
+    <form id="visit-form" class="stack">
+      <div class="field">
+        <label for="hospitalName">병원명</label>
+        <input class="text-input" type="text" id="hospitalName" required>
+      </div>
+      <div class="field">
+        <label for="visitDate">진료일</label>
+        <input class="text-input" type="date" id="visitDate" required>
+      </div>
+      <div class="field">
+        <label>처방 약물</label>
+        <div class="tag-input-box" id="med-tag-box">
+          <input type="text" id="med-input" placeholder="약물명 입력 후 Enter">
+        </div>
+      </div>
+      <div class="field">
+        <label for="diagnosis">진단 내용</label>
+        <textarea class="text-input" id="diagnosis"></textarea>
+      </div>
+      <div class="field">
+        <label for="medicalHistory">병력</label>
+        <textarea class="text-input" id="medicalHistory"></textarea>
+      </div>
+      <div class="field">
+        <label for="testResult">검사 결과</label>
+        <textarea class="text-input" id="testResult"></textarea>
+      </div>
+      <div class="field">
+        <label for="attachments">진단서·검사결과지 파일 첨부</label>
+        <input class="text-input" type="file" id="attachments" accept="image/*,application/pdf" multiple>
+        <p class="muted" style="font-size:13px;margin-top:4px;">
+          병원 실시간 연동 대신, 진단서·검사결과지 등 파일을 직접 첨부해 병원별 자료를 통합 관리합니다. (이미지/PDF, 최대 5개)
+        </p>
+      </div>
+      <p id="error" class="error-text hidden"></p>
+      <div class="row">
+        <a href="/dashboard.html" class="btn btn-secondary">취소</a>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/interactionModal.js"></script>
+  <script>
+    (async () => {
+      const user = await requireLogin();
+      if (!user) return;
+
+      let source = 'manual';
+      const tabs = document.querySelectorAll('.tab');
+      const ocrPanel = document.getElementById('ocr-panel');
+      tabs.forEach((tab) => tab.addEventListener('click', () => {
+        tabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        source = tab.dataset.tab;
+        ocrPanel.classList.toggle('hidden', source !== 'ocr');
+      }));
+
+      document.getElementById('ocr-run').addEventListener('click', () => {
+        // 목업: 실제 OCR 대신 예시 인식 결과로 폼을 채움 (사용자가 확인/수정 후 저장)
+        document.getElementById('hospitalName').value = document.getElementById('hospitalName').value || '서울내과의원';
+        document.getElementById('visitDate').value = document.getElementById('visitDate').value || new Date().toISOString().slice(0, 10);
+        if (medications.length === 0) addMedication('아모잘탄정');
+        document.getElementById('diagnosis').value = document.getElementById('diagnosis').value || '고혈압 소견';
+      });
+
+      const medications = [];
+      const medTagBox = document.getElementById('med-tag-box');
+      const medInput = document.getElementById('med-input');
+
+      function renderTags() {
+        medTagBox.querySelectorAll('.tag-chip').forEach((el) => el.remove());
+        medications.forEach((name, idx) => {
+          const chip = document.createElement('span');
+          chip.className = 'tag-chip';
+          chip.innerHTML = `${name} <button type="button" data-idx="${idx}">×</button>`;
+          chip.querySelector('button').addEventListener('click', () => {
+            medications.splice(idx, 1);
+            renderTags();
+          });
+          medTagBox.insertBefore(chip, medInput);
+        });
+      }
+      function addMedication(name) {
+        const trimmed = name.trim();
+        if (trimmed) { medications.push(trimmed); renderTags(); }
+      }
+      medInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addMedication(medInput.value);
+          medInput.value = '';
+        }
+      });
+
+      document.getElementById('visit-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('error');
+        errorEl.classList.add('hidden');
+        try {
+          const { visitId, interactionResult } = await apiFetch('/api/visits', {
+            method: 'POST',
+            body: JSON.stringify({
+              hospitalName: document.getElementById('hospitalName').value,
+              visitDate: document.getElementById('visitDate').value,
+              medications,
+              diagnosis: document.getElementById('diagnosis').value,
+              medicalHistory: document.getElementById('medicalHistory').value,
+              testResult: document.getElementById('testResult').value,
+              source,
+            }),
+          });
+
+          const attachments = document.getElementById('attachments').files;
+          if (attachments.length > 0) {
+            const formData = new FormData();
+            for (const file of attachments) formData.append('files', file);
+            await fetch(`/api/visits/${visitId}/files`, { method: 'POST', body: formData, credentials: 'same-origin' });
+          }
+
+          if (!showInteractionModalIfNeeded(interactionResult)) {
+            location.href = '/dashboard.html';
+          } else {
+            document.getElementById('interaction-modal-close').addEventListener('click', () => {
+              location.href = '/dashboard.html';
+            }, { once: true });
+          }
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
