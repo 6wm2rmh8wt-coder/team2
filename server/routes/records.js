@@ -1,5 +1,6 @@
 const express = require('express');
-const { put } = require('@vercel/blob');
+const { Readable } = require('stream');
+const { put, get } = require('@vercel/blob');
 const { sql } = require('../db');
 const requireAuth = require('../middleware/requireAuth');
 const { checkInteractions } = require('../services/interactionEngine');
@@ -93,7 +94,7 @@ router.post('/visits/:id/files', upload.array('files', 5), async (req, res) => {
   const files = [];
   for (const file of req.files || []) {
     const blob = await put(`visits/${visit.id}/${Date.now()}-${file.originalname}`, file.buffer, {
-      access: 'public',
+      access: 'private',
       contentType: file.mimetype,
       addRandomSuffix: true,
     });
@@ -114,7 +115,15 @@ router.get('/files/:fileId', async (req, res) => {
   if (!file) {
     return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
   }
-  res.redirect(file.blob_url);
+
+  const result = await get(file.blob_url, { access: 'private' });
+  if (!result) {
+    return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
+  }
+
+  res.setHeader('Content-Type', file.mime_type);
+  res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.original_name)}`);
+  Readable.fromWeb(result.stream).pipe(res);
 });
 
 module.exports = router;
